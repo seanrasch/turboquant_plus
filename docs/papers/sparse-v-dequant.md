@@ -160,7 +160,7 @@ The decode numbers in Section 4.2 are from `llama-bench` batch evaluation, which
 
 The gap between `llama-bench` and `llama-server` results reflects system-level overhead (HTTP handling, templating, scheduling), not a limitation of sparse V itself. Kernel-level measurements approach near-parity with q8\_0 (0.93×), while end-to-end server performance remains lower due to non-kernel costs.
 
-**Takeaway:** Users should expect ~78% of q8\_0 decode speed at long context in real server deployments, not the ~93% measured in synthetic benchmarks. The sparse V improvement still holds; without it, this number would be closer to 60%.
+**Takeaway:** Users should expect ~78% of q8\_0 decode speed at long context in real server deployments, not the ~93% measured in synthetic benchmarks. The sparse V improvement still holds; without it, decode performance would be closer to ~60% of q8\_0.
 
 ### 4.7 Threshold Ablation
 
@@ -295,7 +295,7 @@ More broadly, sparse V dequantization is an instance of a wider class of **atten
 
 ## 9. Conclusion
 
-We present a 3-line modification to flash attention kernels that yields up to 22.8% decode throughput improvement for quantized KV caches at long context, with zero quality degradation, and a surprising improvement in retrieval accuracy, suggesting that dequantizing negligible positions actively introduces noise into the attention output.
+We present a 3-line modification to flash attention kernels that yields up to 22.8% decode throughput improvement for quantized KV caches at long context, with zero quality degradation, and an improvement in retrieval accuracy, suggesting that dequantizing negligible positions actively introduces noise into the attention output.
 
 The core insight is straightforward: Making N dequant operations faster is bounded by hardware limits; eliminating $(1-p) \times N$ of them entirely is not. After 14 failed attempts to optimize the dequant instruction itself, sparse V succeeds by changing the question from "how do we dequantize faster?" to "should we dequantize at all?"
 
