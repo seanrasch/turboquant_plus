@@ -414,27 +414,30 @@ It hurts when:
 
 This suggests a **model-size-adaptive dispatch**: use SMEM pre-dequant for small models (≤3B), 4-mag LUT for large models (≥7B). The crossover is somewhere in between.
 
-## SMEM Pre-Dequant on M5 Max — CATASTROPHIC (2026-03-28 night)
+## SMEM Pre-Dequant on M5 Max — Small Regression (2026-03-28 night, corrected)
 
-Tested SMEM on M5 Max (Apple10) with Qwen3.5-35B-A3B MoE. Opposite of M2 — massive regression.
+Tested SMEM on M5 Max (Apple10) with Qwen3.5-35B-A3B MoE. Initial results showed -77% but that was an env var bug (TURBO_SMEM_DEQUANT not set at runtime). Corrected results with env var properly set:
 
 ### Qwen3.5-35B-A3B Q8_0, M5 Max, decode (tg128 t/s)
 
-| Context | turbo3 baseline | turbo3 SMEM | turbo4 baseline | turbo4 SMEM | q8_0 |
-|---------|----------------|-------------|-----------------|-------------|------|
-| short | 78.47 | **18.39 (-77%)** | 80.40 | **16.93 (-79%)** | 85.48 |
-| 16K | 78.64 | **16.47 (-79%)** | 79.45 | **15.58 (-80%)** | 78.09 |
-| 32K | 78.17 | **16.19 (-79%)** | 80.64 | **16.29 (-80%)** | 86.83 |
+| Context | turbo3 baseline | turbo3 SMEM | turbo4 baseline | turbo4 SMEM |
+|---------|----------------|-------------|-----------------|-------------|
+| short | 78.47 | 80.32 (+2.4%) | 80.40 | 77.64 (-3.4%) |
+| 8K | 78.90 | 76.99 (-2.4%) | 79.84 | 78.78 (-1.3%) |
+| 16K | 78.64 | 77.98 (-0.8%) | — | — |
+| 32K | 78.17 | 76.18 (-2.5%) | — | — |
 
-### Why M5 is opposite of M2
+Note: high variance on some runs (±2.57 t/s). The one positive (turbo3 short +2.4%) is noise.
 
-- **M5's constant cache (Apple10) is already fast** — handles 8-way divergent reads with minimal penalty. SMEM replaces something that's nearly free with something that costs threadgroup stores + barriers + loads.
-- **SMEM kills occupancy** — the threadgroup memory allocation reduces the number of active threadgroups per GPU core. On M5's larger kernels (35B MoE), this is devastating.
-- **M2 benefited because its constant cache is slower** — the tradeoff (SMEM overhead vs slow constant reads) was marginally positive on M2 for small models. On M5, the constant cache is fast enough that the SMEM overhead dominates completely.
+### Why SMEM doesn't help on M5
 
-### Verdict: SMEM is dead for M5
+- **M5's constant cache (Apple10) is already fast** — handles 8-way divergent reads with minimal penalty
+- SMEM adds threadgroup store/barrier/load overhead for data the constant cache was already serving efficiently
+- Unlike M2 where SMEM helped small models +4%, M5 sees no benefit at any context depth
 
-Do NOT ship SMEM pre-dequant for any M5 configuration. The +4% on M2 small models is not worth the complexity or the risk of M5 regression. SMEM pre-dequant is a net negative optimization.
+### Verdict: SMEM is dead
+
+Do NOT ship SMEM pre-dequant. Small regression on M5, marginal win on M2 small models only. Not worth the complexity.
 
 ## Final Conclusion: M2 Decode Ceiling (2026-03-28)
 
